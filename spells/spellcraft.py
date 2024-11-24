@@ -1,21 +1,32 @@
 import click
 import os
+from magi_cli.spells import SANCTUM_PATH  # Import SANCTUM_PATH
 
 @click.command()
-@click.argument('num_commands', type=int, required=True)
-@click.argument('spell_file', required=True)
-def spellcraft(num_commands, spell_file):
-    """Create a macro spell and store it in .tome."""
-    default_tome_dir = os.getenv("TOME_PATH")  # Get default .tome location from environment variable
-    tome_dir = default_tome_dir if default_tome_dir else ".tome"  # Use .tome in current directory if default location is not set
+@click.argument('num_commands', type=int, required=False)
+@click.argument('spell_file', required=False)
+@click.argument('args', nargs=-1, required=False)
+def spellcraft(num_commands=None, spell_file=None, args=None):
+    """ 'sc' - Create a macro spell and store it in .tome."""
+    # Check if num_commands and spell_file are provided directly
+    if num_commands is None or spell_file is None:
+        if args and len(args) >= 1:
+            try:
+                num_commands = int(args[0])
+                spell_file = args[1]
+            except (ValueError, IndexError):
+                click.echo("Error: Invalid arguments provided to spellcraft. Example: `cast sc 3 test_spell`")
+                return
+        else:
+            click.echo("Error: Not enough arguments provided to spellcraft. Example: `cast sc 3 test_spell`")
+            return
 
-    if not os.getenv('TOME_PATH'):
-        os.environ['TOME_PATH'] = input('Please set your TOME_PATH environmental variable or Magi_CLI will default to a .tome folder in your local directory. Press enter to continue.')
-        pass
+    # Use SANCTUM_PATH for the .tome directory
+    tome_dir = os.path.join(SANCTUM_PATH, '.tome')
 
     # If .tome directory does not exist, create it
     if not os.path.exists(tome_dir):
-        os.mkdir(tome_dir)
+        os.makedirs(tome_dir)
 
     # Prompt the user for a description
     description = click.prompt("Enter a description for the macro spell")
@@ -36,3 +47,11 @@ def spellcraft(num_commands, spell_file):
             f.write(f"{command}\n")
 
     click.echo(f"Macro spell created and stored in {spell_file_path}")
+
+alias = "sc"
+
+def main():
+    spellcraft()
+
+if __name__ == '__main__':
+    main()

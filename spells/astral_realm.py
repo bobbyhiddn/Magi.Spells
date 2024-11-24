@@ -7,7 +7,7 @@ from git import Repo
 @click.command()
 @click.argument('repo_url', required=True)
 def astral_realm(repo_url):
-    """Clone a remote repository, start a local server, and populate a webpage with the repository's files. """
+    """ 'ar' - Clone a remote repository, start a local server, and populate a webpage with the repository's files. """
     repo_dir = tempfile.mkdtemp()
     Repo.clone_from(repo_url, repo_dir)
     app.config['REPO_DIR'] = repo_dir
@@ -86,3 +86,11 @@ def file(file_path):
         with open(absolute_path, 'w') as file:
             file.write(request.data.decode())
         return '', 204
+    
+alias = "ar"
+
+def main():
+    astral_realm()
+
+if __name__ == '__main__':
+    main()

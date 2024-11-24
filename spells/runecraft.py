@@ -1,30 +1,48 @@
 import os
-import subprocess
-import click
-from PIL import Image, ImageDraw, ImageOps
-from io import BytesIO
 import requests
-import openai
+import subprocess
+import sys
+import click
 import pkg_resources
+from magi_cli.spells import SANCTUM_PATH 
+from PIL import ImageDraw, Image, ImageOps
+from io import BytesIO
+from openai import OpenAI
 
-DEFAULT_IMAGE_PATH = pkg_resources.resource_filename(__name__, 'Rune.png') 
+DEFAULT_IMAGE_PATH = pkg_resources.resource_filename('magi_cli.artifacts', 'Rune.png')
+
+# Load the Openai API key
+api_key = os.getenv("OPENAI_API_KEY")
+
+if not api_key:
+    print("If you would like to inquire the aether or generate runes, please set the OPENAI_API_KEY environment variable.")
+    sys.exit(1)
+else:
+    # Set the API key for the OpenAI package
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    if OPENAI_API_KEY:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+    else:
+        client = None
 
 # Function to generate an image using DALL-E API
 def generate_image(prompt):
-    if 'OPENAI_API_KEY' in os.environ:
-        response = openai.Image.create(
-            model="image-alpha-001",
+    if client:        
+        response = client.images.generate(
+            model="dall-e-3",
             prompt=prompt,
             n=1,
-            size="256x256",
+            size="1024x1024",
             response_format="url"
         )
-        image_url = response['data'][0]['url']
+        # Extract the image URL using dot notation
+        image_url = response.data[0].url
         image_data = requests.get(image_url).content
         image = Image.open(BytesIO(image_data))
     else:
-        # Load the default image if the OPENAI_API_KEY environment variable is not set
+        # Fallback to a default image if the client is not available
         image = Image.open(DEFAULT_IMAGE_PATH)
+
     return image
 
 # Function to create a circular mask
@@ -36,26 +54,17 @@ def create_circular_mask(image):
     return mask
 
 @click.command()
-@click.argument('file_path', required=True)
-def runecraft(file_path):
-    '''Generate a GUI for a Bash script in the form of an enchanted rune.'''
-    # Get the image size to set the window size
-    base_filename = os.path.basename(file_path)
-    file_extension = os.path.splitext(base_filename)[1]
+@click.argument('args', nargs=-1, required=True)  # Accepts multiple file paths
+def runecraft(args):
+    ''' 'rc' - Generate a GUI for a Bash script in the form of an enchanted rune.'''
 
-    # Define a dictionary that maps file extensions to commands
-    extension_to_command = {
-        '.sh': 'bash',
-        '.py': 'python',
-        '.spell': 'cast'
-    }
-
-    # Get the command for the input file's extension
-    command = extension_to_command.get(file_extension, '')
-
-    # Handle the case where the file extension is not supported
-    if not command:
-        print(f"File extension '{file_extension}' is not supported.")
+    # Correctly handle the first file path from the list
+    if args:
+        file_path = args[0]
+        base_filename = os.path.basename(file_path)
+    else:
+        # Handle the case where no file path is provided
+        click.echo("Error: No file path provided.")
         return
 
     print("Gathering the mana...")
@@ -76,8 +85,14 @@ def runecraft(file_path):
     # Convert the image to RGBA mode
     circular_image = circular_image.convert('RGBA')
 
-    # Create a new directory for the rune
-    rune_dir = f".runes/{base_filename.rsplit('.', 1)[0]}"
+    # Get the image size to set the window size
+    image_width, image_height = circular_image.size
+    file_extension = os.path.splitext(base_filename)[1]
+
+    # Use SANCTUM_PATH for .runes directory
+    runes_dir = os.path.join(SANCTUM_PATH, '.runes')
+    rune_subdir = base_filename.rsplit('.', 1)[0]
+    rune_dir = os.path.join(runes_dir, rune_subdir)
     os.makedirs(rune_dir, exist_ok=True)
 
     # Save the generated image as a PNG
@@ -85,8 +100,25 @@ def runecraft(file_path):
     image_full_path = os.path.join(rune_dir, image_file)
     circular_image.save(image_full_path, format="PNG")
 
+
+    # Define a dictionary that maps file extensions to commands
+    extension_to_command = {
+        '.sh': 'bash',
+        '.py': 'python',
+        '.spell': 'cast'
+    }
+
+    # Get the command for the input file's extension
+    command = extension_to_command.get(file_extension, '')
+
+    # Handle the case where the file extension is not supported
+    if not command:
+        print(f"File extension '{file_extension}' is not supported.")
+        return
+
     gui_file_name = base_filename.rsplit('.', 1)[0] + '_gui.py'
     image_file = base_filename.rsplit('.', 1)[0] + '_image.png'
+
 
     # Save the generated image as a PNG in the rune directory
     circular_image.save(os.path.join(rune_dir, image_file), format="PNG")
@@ -98,16 +130,17 @@ import signal
 from PyQt5.QtGui import QPixmap, QColor
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect, QApplication, QLabel, QVBoxLayout, QWidget, QPushButton
 from PyQt5.QtCore import Qt
+import sys
 
 # Ignore SIGINT
 signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 class ImageButton(QLabel):
-    def __init__(self, image_path, command, file_path, *args, **kwargs):
+    def __init__(self, image_path, command, path, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.pixmap = QPixmap(image_path)
         self.command = command
-        self.file_path = file_path
+        self.path = path
         self.moved = False
 
         # Create a QGraphicsDropShadowEffect
@@ -129,7 +162,7 @@ class ImageButton(QLabel):
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton and not self.moved:
-            subprocess.run([self.command, self.file_path])
+            subprocess.run([self.command, self.path])
         self.moved = False
         super().mouseReleaseEvent(event)
 
@@ -160,7 +193,7 @@ window.setAttribute(Qt.WA_TranslucentBackground)
 layout = QVBoxLayout(window)
 layout.setAlignment(Qt.AlignCenter) # Center alignment
 
-image_button = ImageButton(r"{image_full_path}", "{command}", "{file_path}")
+image_button = ImageButton(r"{image_full_path}", "{command}", r"{file_path}")
 layout.addWidget(image_button)
 
 # Add a close button
@@ -203,7 +236,8 @@ close_button.move(110, 0)
 window.show()
 
 sys.exit(app.exec_())
-    '''
+
+'''
 
     # Write the PyQt script to a file in the rune directory
     with open(os.path.join(rune_dir, gui_file_name), 'w') as f:
@@ -214,5 +248,10 @@ sys.exit(app.exec_())
     # Now run the new file
     subprocess.Popen(["python", os.path.join(rune_dir, gui_file_name)], start_new_session=True)
 
-if __name__ == '__main__':
+alias = "rc"
+
+def main():
     runecraft()
+
+if __name__ == '__main__':
+    main()
