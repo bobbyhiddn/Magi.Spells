@@ -8,6 +8,8 @@ from cryptography.hazmat.primitives import serialization as crypto_serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend as crypto_default_backend
 
+__requires__ = ['click', 'paramiko', 'cryptography']
+
 # Define the path for the .circle file within the SANCTUM_PATH
 SANCTUM_PATH = os.getenv('SANCTUM_PATH', os.path.expanduser('~/.sanctum'))
 CIRCLE_PATH = os.path.join(SANCTUM_PATH, '.circle')

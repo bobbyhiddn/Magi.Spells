@@ -2,6 +2,8 @@ import click
 import os
 from magi_cli.spells import SANCTUM_PATH  # Import SANCTUM_PATH
 
+__requires__ = ['click']
+
 @click.command()
 @click.argument('num_commands', type=int, required=False)
 @click.argument('spell_file', required=False)

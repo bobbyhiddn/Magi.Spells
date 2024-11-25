@@ -7,6 +7,8 @@ import click
 from openai import OpenAI
 from magi_cli.spells import SANCTUM_PATH
 
+__requires__ = ['click', 'beautifulsoup4', 'openai', 'requests']
+
 # Load the OpenAI API key
 api_key = os.getenv("OPENAI_API_KEY")
 

@@ -4,6 +4,8 @@ import click
 from flask import Flask, render_template_string, request
 from git import Repo
 
+__requires__ = ['click', 'flask', 'gitpython']
+
 @click.command()
 @click.argument('repo_url', required=True)
 def astral_realm(repo_url):

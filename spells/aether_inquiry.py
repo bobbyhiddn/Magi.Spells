@@ -6,6 +6,8 @@ from datetime import datetime
 from magi_cli.spells import SANCTUM_PATH
 from openai import OpenAI
 
+__requires__ = ['click', 'openai']
+
 def is_readable(file_path):
     """Check if a file is readable as text."""
     try:

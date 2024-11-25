@@ -1,8 +1,9 @@
 import click
 import os
-import sys
 from datetime import datetime
 from magi_cli.spells import SANCTUM_PATH
+
+__requires__ = ['click']
 
 def is_readable(file_path):
     """Check if a file is readable as text."""

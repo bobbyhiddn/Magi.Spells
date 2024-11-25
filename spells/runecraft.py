@@ -9,6 +9,8 @@ from PIL import ImageDraw, Image, ImageOps
 from io import BytesIO
 from openai import OpenAI
 
+__requires__ = ['click', 'requests', 'Pillow', 'openai', 'PyQt5']
+
 DEFAULT_IMAGE_PATH = pkg_resources.resource_filename('magi_cli.artifacts', 'Rune.png')
 
 # Load the Openai API key
