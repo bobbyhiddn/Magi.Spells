@@ -20,16 +20,15 @@ circle_lock = Lock()
 os.makedirs(SANCTUM_PATH, exist_ok=True)
 os.makedirs(KEY_PATH, exist_ok=True)
 
-@click.group(invoke_without_command=True)
+@click.command()
 @click.argument('args', nargs=-1)
-@click.pass_context
-def warp(ctx, args):
+def warp(args):
     """ 'wp' - Warp to remote SSH sessions with ease. Previous warps are saved under ~/.sanctum/.circle"""
-    alias = None if not args else args[0]
+    session_alias = None if not args else args[0]
     sessions = load_sessions()
 
     while True:
-        if not alias:
+        if not session_alias:
             list_sessions(sessions)
             selected_session = click.prompt("Choose a session number, 'E' to edit the circle, 'A' to add a session, or 'Q' to cease the spell.", default="")
             if selected_session.upper() == 'E':
@@ -38,24 +37,24 @@ def warp(ctx, args):
                     continue
                 return
             elif selected_session.upper() == 'A':
-                alias = click.prompt("Enter the alias for the new session")
-                sessions[alias] = register_host(alias, sessions)
+                session_alias = click.prompt("Enter the alias for the new session")
+                sessions[session_alias] = register_host(session_alias, sessions)
                 save_sessions(sessions)
                 return
             elif selected_session.isdigit() and int(selected_session) <= len(sessions):
-                alias = list(sessions.keys())[int(selected_session) - 1]
+                session_alias = list(sessions.keys())[int(selected_session) - 1]
             elif selected_session.upper() == 'Q':
                 break
             else:
                 click.echo("Bypassing the mystical session selection.")
                 return
 
-        if alias in sessions:
-            click.echo(f"Warping to {alias}...")
-            connect_to_host(sessions[alias])
+        if session_alias in sessions:
+            click.echo(f"Warping to {session_alias}...")
+            connect_to_host(sessions[session_alias])
         else:
-            if click.confirm(f"Host '{alias}' not found in your teleportation circle. Would you like to register it and forge a mystical connection?"):
-                sessions[alias] = register_host(alias, sessions)
+            if click.confirm(f"Host '{session_alias}' not found in your teleportation circle. Would you like to register it and forge a mystical connection?"):
+                sessions[session_alias] = register_host(session_alias, sessions)
                 save_sessions(sessions)
             else:
                 click.echo("The arcane energies remain undisturbed. Operation cancelled.")
@@ -236,27 +235,6 @@ def connect_to_host(session):
         ssh_command += ['-i', session['key']]
     ssh_command.append(f"{session['user']}@{session['host']}")
     subprocess.run(ssh_command)
-
-@warp.command()
-@click.argument('alias')
-def connect(alias):
-    sessions = load_sessions()
-    if alias not in sessions:
-        click.echo("This realm is unknown to the arcane forces.")
-        return
-    session = sessions[alias]
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    try:
-        if 'key' in session:
-            key_path = os.path.expanduser(session['key'])
-            key = paramiko.RSAKey.from_private_key_file(key_path)
-            ssh.connect(session['host'], username=session['user'], pkey=key)
-        else:
-            ssh.connect(session['host'], username=session['user'])
-        click.echo(f"Connected to {alias}.")
-    finally:
-        ssh.close()
 
 alias = "wp"
 
