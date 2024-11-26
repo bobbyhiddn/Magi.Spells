@@ -9,7 +9,7 @@ __requires__ = ['click']
 @click.argument('spell_file', required=False)
 @click.argument('args', nargs=-1, required=False)
 def spellcraft(num_commands=None, spell_file=None, args=None):
-    """ 'sc' - Create a macro spell and store it in .tome."""
+    """ 'sc' - Create a macro spell out of commands and store it in ~/.sanctum/.tome."""
     # Check if num_commands and spell_file are provided directly
     if num_commands is None or spell_file is None:
         if args and len(args) >= 1:
