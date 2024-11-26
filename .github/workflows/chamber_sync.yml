@@ -11,12 +11,14 @@ jobs:
         if: github.event.workflow_run.conclusion == 'success'
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/github-script@v6
-            - name: Trigger Chamber Sync
-              run: |
-                await github.rest.actions.createworkflowDispatch({
-                    owner: 'bobbyhiddn',
-                    repo: 'Magi.Chamber',
-                    workflow_id: 'fly-deploy.yml',
-                    ref: 'main'
-                })   
+          - name: Trigger Chamber Sync
+            uses: actions/github-script@v6
+            with:
+              github-token: ${{ secrets.CHAMBER_API_KEY }}
+              script: |
+                await github.rest.actions.createWorkflowDispatch({
+                  owner: 'bobbyhiddn',
+                  repo: 'Magi.Chamber',
+                  workflow_id: 'fly-deploy.yml',
+                  ref: 'main'
+                })
