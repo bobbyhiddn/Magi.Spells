@@ -85,7 +85,7 @@ def send_message(message_log):
 @click.command()
 @click.argument('args', nargs=-1)  # Accepts multiple file paths
 def aether_inquiry(args):
-    """'ai' - Call upon the arcane intellect of an aether intelligence(OpenAI GPT4o) to answer questions, generate spells, or just conversate."""
+    """'ai' - Call upon an aether intelligence(OpenAI GPT4o) to answer questions, generate spells, or just conversate."""
 
     message_log = [
         {"role": "system", "content": "You are a wizard trained in the arcane. You have deep knowledge of software development and computer science. You can cast spells and read tomes to gain knowledge about problems. Please greet the user. All code and commands should be in code blocks in order to properly help the user craft spells."}
