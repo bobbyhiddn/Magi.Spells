@@ -1,10 +1,9 @@
 name: Trigger Chamber Sync Job
 
 on:
-    workflow_run:
-        workflows: [fly-deploy] # Name of GitHub workflow to trigger in target repository
-        types:
-        - completed
+    push:
+      branches:
+        - main  # Adjust as needed
 jobs:
     trigger_sync:
         env:
