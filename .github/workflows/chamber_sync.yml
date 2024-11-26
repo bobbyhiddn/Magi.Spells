@@ -1,11 +1,12 @@
 name: Trigger Chamber Sync Job
+
 on:
     workflow_run:
         workflows: [fly-deploy] # Name of GitHub workflow to trigger in target repository
         types:
         - completed
 jobs:
-    trigger-repob-workflow:
+    trigger_sync:
         env:
             github-token: ${{ secrets.CHAMBER_API_KEY }} # Fine-grained GitHub PAT that was saved as repository secret
         if: github.event.workflow_run.conclusion == 'success'
