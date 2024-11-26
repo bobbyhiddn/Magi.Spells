@@ -10,6 +10,7 @@ __requires__ = ['click', 'flask', 'gitpython']
 @click.argument('repo_url', required=True)
 def astral_realm(repo_url):
     """ 'ar' - Manifest an astral plane. Clone a remote repository, start a local server, and populate a webpage with the repository's files. """
+
     repo_dir = tempfile.mkdtemp()
     Repo.clone_from(repo_url, repo_dir)
     app.config['REPO_DIR'] = repo_dir

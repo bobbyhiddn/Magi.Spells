@@ -127,7 +127,7 @@ def final_review(original_content, improved_content):
 @click.command()
 @click.argument('args', nargs=-1)  # Accept multiple arguments like other spells
 def pagecraft(args):
-    """'pgc' - Craft a Markdown page from a URL through the use of aether inquiry(AI)."""
+    """ 'pgc' - Craft a Markdown page from a URL through the use of aether inquiry(AI). """
 
     if not args:
         print("Please provide a URL to craft a page from.")
