@@ -24,7 +24,7 @@ os.makedirs(KEY_PATH, exist_ok=True)
 @click.argument('args', nargs=-1)
 @click.pass_context
 def warp(ctx, args):
-    """ 'wp' - Warp to remote SSH sessions with ease."""
+    """ 'wp' - Warp to remote SSH sessions with ease. Previous warps are saved under ~/.sanctum/.circle"""
     alias = None if not args else args[0]
     sessions = load_sessions()
 
