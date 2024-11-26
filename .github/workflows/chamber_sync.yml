@@ -1,0 +1,23 @@
+name: Trigger Chamber Sync
+
+on:
+  push:
+    branches:
+      - main  # Adjust as needed
+
+jobs:
+  trigger_sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Signature and Trigger Webhook
+        env:
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          WEBHOOK_URL: 'https://magi-chamber.fly.dev/webhook'  # Replace with your actual URL
+        run: |
+          PAYLOAD='{}'  # Empty JSON payload
+          SIGNATURE='sha256='$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | sed 's/^.* //')
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: $SIGNATURE" \
+            -d "$PAYLOAD" \
+            "$WEBHOOK_URL"
