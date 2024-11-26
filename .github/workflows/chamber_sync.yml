@@ -7,7 +7,7 @@ on:
 jobs:
     trigger_sync:
         env:
-            github-token: ${{ secrets.CHAMBER_API_KEY }} # Fine-grained GitHub PAT that was saved as repository secret
+            github-token: ${{ secrets.CHAMBER_API_KEY }} # Fine-grained GitHub PAT is saved as action secret.
         runs-on: ubuntu-latest
         steps:
           - name: Trigger Chamber Sync
