@@ -1,0 +1,1 @@
+This is a place for retired or non-functional spells. Spells that are no longer maintained or have been replaced by newer versions can be moved here. This section is useful for historical purposes and to prevent cluttering the main spell list. I don't want to delete these spells, as I may come back to them in the future or someone else may find them useful.
