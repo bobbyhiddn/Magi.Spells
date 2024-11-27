@@ -1,5 +1,7 @@
 # Magi.Spells
 
+TEST
+
 Welcome to **Magi.Spells**, a collection of optional spells for the **Magi.CLI** tool. These spells enhance your magical command-line experience by providing additional functionalities. 
 
 The spells are stored in the **Magi.Chamber** server and can be easily pulled into your local environment. It serves as both a spell repository and a devlog for the MAGI CLI project at this site:
