@@ -2,12 +2,13 @@ import click
 import re
 import os
 import sys
+import pathspec
 from datetime import datetime
 from pathlib import Path
 from magi_cli.spells import SANCTUM_PATH
 from openai import OpenAI
 
-__requires__ = ['click', 'openai']
+__requires__ = ['click', 'openai', 'pathspec']
 
 def is_readable(file_path):
     """Check if a file is readable as text."""
@@ -29,10 +30,34 @@ def read_directory(path, prefix="", md_file_name="directory_contents"):
     md_file_name_with_timestamp = f"{md_file_name}_{timestamp}.md"
     markdown_file_path = os.path.join(aether_dir, md_file_name_with_timestamp)
 
+    # Load gitignore patterns if available
+    gitignore_patterns = None
+    gitignore_path = os.path.join(path, '.gitignore')
+    if os.path.exists(gitignore_path):
+        with open(gitignore_path, 'r', encoding='utf-8') as f:
+            patterns = [p.strip() for p in f.readlines() if p.strip()]
+            gitignore_patterns = pathspec.PathSpec.from_lines('gitwildmatch', patterns)
+
     contents = ""
     with open(markdown_file_path, 'a', encoding='utf-8', errors='replace') as md_file:
         for item in os.listdir(path):
+            # Skip .git directory
+            if item == '.git':
+                continue
+
             full_path = os.path.join(path, item)
+            rel_path = os.path.relpath(full_path, path)
+            
+            # For directories, ensure path ends with / for proper matching
+            if os.path.isdir(full_path):
+                rel_path_for_match = rel_path + "/"
+            else:
+                rel_path_for_match = rel_path
+                
+            # Skip if path matches gitignore patterns
+            if gitignore_patterns and gitignore_patterns.match_file(rel_path_for_match):
+                continue
+
             if os.path.isdir(full_path):
                 dir_line = f"{prefix}/{item}/\n"
                 contents += dir_line
