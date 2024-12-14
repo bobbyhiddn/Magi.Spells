@@ -3,6 +3,7 @@ import re
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 from magi_cli.spells import SANCTUM_PATH
 from openai import OpenAI
 
@@ -49,179 +50,255 @@ def read_directory(path, prefix="", md_file_name="directory_contents"):
                 md_file.write(file_line)
     return contents
 
-# This can also be done by setting the OPENAI_API_KEY environment variable manually.
+def get_enhanced_prompt():
+    """Return enhanced system prompt with YAML spell creation knowledge."""
+    return '''You are a technowizard trained in the arcane, specializing in spell creation through YAML configurations. 
+You have deep knowledge of software development and computer science. You generate python scripts, bash scripts and spells in YAML. When creating spells, follow these guidelines:
 
-# Load the Openai API key
-api_key = os.getenv("OPENAI_API_KEY")
+1. Choose names for spells that reflect their purpose, for example:
+   - echo (for a script that prints text)
+   - mystic_portal (for a file transfer tool)
+   - sacred_sentinel (for a monitoring script)
+   - loci_logger (for a logging utility)
+   - crystal_cipher (for an encryption tool)
+   Always use underscores between words and keep names lowercase.
 
-if not api_key:
-    print("If you would like to inquire the aether or generate runes, please set the OPENAI_API_KEY environment variable.")
-    sys.exit(1)
-else:
-    # Set the API key for the OpenAI package
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    if OPENAI_API_KEY:
-        client = OpenAI(api_key=OPENAI_API_KEY)
-    else:
-        client = None
+2. Generate complete YAML configurations following this structure:
+   - name: Spell identifier (magical and evocative, lowercase with underscores)
+   - description: Clear purpose description with a magical flavor
+   - type: Usually 'bundled' or 'script'
+   - shell_type: 'python' or 'bash'
+   - requires: List of Python package dependencies
+   - code: The main spell implementation (must include proper Click CLI setup)
+   - artifacts: Any additional files needed
+
+3. After providing the YAML configuration, always include this note, and format it with the generated spell name:
+   "To create this spell, save the YAML to a file (e.g., <spell_name>.yaml) by entering `scribe` in the chat and then run:
+   `cast sc <spell_name>.yaml` to create the spell in your .tome directory. You may then cast it at any time using `cast <spell_name>`."
+
+Here is an example spell configuration:
+
+```yaml
+name: arcane_art
+description: A spell to transmute plain text into mesmerizing ASCII art, using a selection of mystical fonts.
+type: script
+shell_type: python
+requires:
+  - art>=6.0
+code: |
+  #!/usr/bin/env python3
+  from art import text2art
+  import random
+  import sys
+
+  FONTS = ['block', 'banner', 'standard', 'avatar', 'basic', 'bigchief', 'cosmic', 'digital', 
+          'dotmatrix', 'drpepper', 'epic', 'isometric1', 'letters', 'alligator', 'crazy', 'doom']
+
+  def main():
+      # Get text from args or use default
+      text = sys.argv[1] if len(sys.argv) > 1 else "Magic!"
+      
+      # Try with a random font first
+      font = random.choice(FONTS)
+      try:
+          art = text2art(text, font=font)
+          print(f"\nUsing font: {font}\n")
+          print(art)
+      except Exception as e:
+          print(f"Error with font {font}: {e}")
+          print("\nTrying with standard font instead...")
+          print(text2art(text))
+
+  if __name__ == '__main__':
+      main()
+```
+
+When generating python or bash scripts, use the following structure:
+
+```bash
+#!/usr/bin/env bash
+# <description>
+<content of script>
+```
+
+```python
+# <description>
+<content of script>
+```
+
+When providing a script, always include this note:
+"To create this script, save the file to a text file (e.g., <script_name>.py or <script_name>.sh) by entering `scribe` in the chat. This will prompt you to save the file and you will select the file type.
+It will then prompt for a name, and it will save the script in your current directory. You may then execute it."
+
+Your responses for general queries should be informative and helpful, using your arcane knowledge
+to assist with software development, system administration, and other technical tasks.'''
 
 def send_message(message_log):
-    # Check if the OpenAI client is instantiated
-    if client:
-        # Use the OpenAI API to send the message
+    """Send a message to the OpenAI API and return the response."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return "OpenAI API key is not set. Unable to consult the aether for wisdom."
+    
+    try:
+        client = OpenAI(api_key=api_key)
         response = client.chat.completions.create(
-            model="chatgpt-4o-latest",  # or your desired model
+            model="gpt-4o",
             messages=message_log,
-            max_tokens=5000,
+            max_tokens=4096,
             temperature=0.7,
         )
-
-        # Return the response content if available
         return response.choices[0].message.content if response.choices else "No response received from the aether."
-    else:
-        # Return a message indicating the API key is not set
-        return "OpenAI API key is not set. Unable to consult the aether for wisdom."
+    except Exception as e:
+        return f"Error consulting the aether: {str(e)}"
 
 @click.command()
-@click.argument('args', nargs=-1)  # Accepts multiple file paths
+@click.argument('args', nargs=-1)
 def aether_inquiry(args):
-    """ 'ai' - Call upon an aether intelligence(OpenAI GPT4o) to answer questions, generate spells, or just converse with files and folders. You may also store conversations and pick them up later."""
-
+    """'ai' - Call upon an aether intelligence (OpenAI) to answer questions, generate spells, or converse about files and folders."""
+    
+    # Initialize message log with enhanced system prompt
     message_log = [
-        {"role": "system", "content": "You are a wizard trained in the arcane. You have deep knowledge of software development and computer science. You can cast spells and read tomes to gain knowledge about problems. Please greet the user. All code and commands should be in code blocks in order to properly help the user craft spells."}
+        {"role": "system", "content": get_enhanced_prompt()}
     ]
 
     # Check for previous conversations
-    previous_inquiries = []
-
-    # Use SANCTUM_PATH for .aether directory
     aether_dir = os.path.join(SANCTUM_PATH, '.aether')
-    if os.path.exists(aether_dir):
-        for filename in os.listdir(aether_dir):
-            if filename.startswith('Inquiry-') and filename.endswith('.md'):
-                previous_inquiries.append(filename)
-
+    os.makedirs(aether_dir, exist_ok=True)
+    
+    previous_inquiries = [f for f in os.listdir(aether_dir) 
+                         if f.startswith('Inquiry-') and f.endswith('.md')]
 
     if previous_inquiries:
-        continue_prompt = input("Do you want to pick up where you left off from another conversation? (y/n): ")
-        if continue_prompt.lower() in ['y', 'yes']:
-            print("Select a previous conversation to continue:")
+        if click.confirm("Would you like to continue a previous conversation?"):
+            print("\nSelect a previous conversation:")
             for idx, filename in enumerate(previous_inquiries, 1):
                 print(f"{idx}. {filename}")
-            selected_index = input("Enter the number of the conversation (just press enter to skip): ")
-            if selected_index.isdigit():
-                selected_index = int(selected_index) - 1
-                if 0 <= selected_index < len(previous_inquiries):
-                    with open(os.path.join(aether_dir, previous_inquiries[selected_index]), 'r') as f:
-                        previous_conversation = f.read()
-                    # Add the previous conversation to the message log
-                    message_log.append({"role": "user", "content": previous_conversation})
-                    print("You may now ask your questions to the aether.")
-                else:
-                    print("Invalid selection. Skipping.")
-                    
+            
+            selected = click.prompt("Enter conversation number (or press Enter to skip)", 
+                                  type=click.INT, default=0, show_default=False)
+            
+            if 1 <= selected <= len(previous_inquiries):
+                with open(os.path.join(aether_dir, previous_inquiries[selected-1]), 'r') as f:
+                    message_log.append({"role": "user", "content": f.read()})
+                print("\nPrevious conversation loaded. You may continue your inquiry.")
 
-    # Check if any file paths are provided
+    # Handle file and directory inputs
     if args:
         for file_path in args:
             if os.path.isdir(file_path):
-                # Ask user if they want to transcribe directory contents
-                transcribe_confirm = input(f"Do you want to transcribe the contents of the directory '{file_path}' to the .aether directory? (yes/no): ")
-                if transcribe_confirm.lower() in ['yes', 'y']:
-                    # If it's a directory and user confirms, read its contents
+                if click.confirm(f"Transcribe contents of '{file_path}' directory?"):
                     directory_contents = read_directory(file_path)
                     message_log.append({"role": "user", "content": directory_contents})
-                else:
-                    print(f"Skipping transcription of '{file_path}'.")
             else:
-                # Process files as before
-                with open(file_path, 'r') as file:
-                    file_content = file.read()
-                message_log.append({"role": "user", "content": file_content})
-        print("You provided files/folders as offerings to the aether. You may now ask your questions regarding them.")
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as file:
+                        message_log.append({"role": "user", "content": file.read()})
+                except UnicodeDecodeError:
+                    print(f"Unable to read '{file_path}' - file appears to be binary.")
+        print("\nProvided files/folders have been analyzed. You may now inquire about them.")
     else:
-        print("No file or folder provided. You may ask your questions to the aether.")
-
+        print("\nYou may begin your inquiry with the aether.")
 
     last_response = ""
-
     while True:
-        user_input = input("You: ")
+        user_input = click.prompt("You", type=str)
 
         if user_input.lower() == "quit":
-            save_prompt = input("Do you want to save this conversation? (y/n): ")
-            if save_prompt.lower() in ['y', 'yes']:
+            if click.confirm("Save this conversation?"):
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 inquiry_filename = f"Inquiry-{timestamp}.md"
+                
                 with open(os.path.join(aether_dir, inquiry_filename), 'w') as f:
                     f.write(f"# Aether Inquiry Conversation - {timestamp}\n\n")
                     for message in message_log:
                         sender = 'User' if message['role'] == 'user' else 'mAGI'
                         f.write(f"{sender}: {message['content']}\n\n")
-                print(f"Conversation saved as {inquiry_filename}.")
-            print("Farewell until next time.")
+                print(f"Conversation saved as {inquiry_filename}")
+            print("May your future inquiries be fruitful. Farewell.")
             break
 
         elif user_input.lower() == "scribe":
-            save_prompt = input("Do you want to save the last response as a spell file, bash file, Python script, Markdown file, or just copy the last message? (spell/bash/python/markdown/copy/none): ")
+            save_format = click.prompt(
+                "Save as",
+                type=click.Choice(['yaml', 'python', 'bash', 'markdown', 'copy'], case_sensitive=False)
+            )
 
-            if save_prompt.lower() == "markdown":
-                # Save as Markdown file
-                markdown_file_name = input("Enter the name for the Markdown file (without the .md extension): ")
-                with open(f"{markdown_file_name}.md", 'w') as md_file:
-                    md_file.write(f"# Response\n\n{last_response}")
-                print(f"Markdown saved as {markdown_file_name}.md.")
+            if save_format == "yaml":
+                # Extract YAML content from code blocks
+                yaml_blocks = re.findall(r'```yaml(.*?)```', last_response, re.DOTALL)
+                if not yaml_blocks:
+                    print("No YAML configuration found in the response.")
+                    continue
+                    
+                yaml_content = yaml_blocks[0].strip()
+                yaml_file_name = click.prompt("Enter name for YAML file (without extension)")
+                
+                with open(f"{yaml_file_name}.yaml", 'w') as f:
+                    f.write(yaml_content)
+                print(f"\nYAML configuration saved as {yaml_file_name}.yaml")
+                print(f"\nTo create the spell, run:")
+                print(f"cast sc {yaml_file_name}.yaml")
 
-            if save_prompt.lower() == "spell":
-                # Save as spell file
-                code_blocks = re.findall(r'(```bash|`)(.*?)(```|`)', last_response, re.DOTALL)
-                code = '\n'.join(block[1].strip() for block in code_blocks)
-                spell_file_name = input("Enter the name for the spell file (without the .spell extension): ")
-                spell_file_path = f".tome/{spell_file_name}.spell"
-                with open(spell_file_path, 'w') as f:
-                    if code_blocks:
-                        f.write(code)
-                    else:
-                        f.write(last_response)
-                print(f"Spell saved as {spell_file_name}.spell in .tome directory.")
-
-            elif save_prompt.lower() == "bash":
-                # Save as bash file
-                code_blocks = re.findall(r'(```bash|`)(.*?)(```|`)', last_response, re.DOTALL)
-                code = '\n'.join(block[1].strip() for block in code_blocks)
-                bash_file_name = input("Enter the name for the Bash script (without the .sh extension): ")
-                with open(f"{bash_file_name}.sh", 'w') as f:
-                    if code_blocks:
-                        f.write(code)
-                    else:
-                        f.write(last_response)
-                print(f"Bash script saved as {bash_file_name}.sh.")
-
-            elif save_prompt.lower() == "python":
-                # Save as Python script
-                code_blocks = re.findall(r'(```python|`)(.*?)(```|`)', last_response, re.DOTALL)
-                code = '\n'.join(block[1].strip() for block in code_blocks)
-                python_file_name = input("Enter the name for the Python script (without the .py extension): ")
+            elif save_format == "python":
+                # Extract Python code blocks
+                code_blocks = re.findall(r'```python(.*?)```', last_response, re.DOTALL)
+                if not code_blocks:
+                    # Try alternative code block format
+                    code_blocks = re.findall(r'```py(.*?)```', last_response, re.DOTALL)
+                
+                if not code_blocks:
+                    print("No Python code found in the response.")
+                    continue
+                
+                # Combine all Python code blocks
+                code = '\n\n'.join(block.strip() for block in code_blocks)
+                python_file_name = click.prompt("Enter name for Python script (without extension)")
+                
                 with open(f"{python_file_name}.py", 'w') as f:
-                    if code_blocks:
-                        f.write(code)
-                    else:
-                        f.write(last_response)
-                print(f"Python script saved as {python_file_name}.py.")
-
-            elif save_prompt.lower() == "copy":
-                # Copy the last message
-                code = last_response
-                message_file_name = input("Enter the name for the message file (without the .txt extension): ")
-                with open(f"{message_file_name}.txt", 'w') as f:
                     f.write(code)
-                print(f"Message saved as {message_file_name}.txt.")
+                # Make executable
+                Path(f"{python_file_name}.py").chmod(0o755)
+                print(f"Python script saved as {python_file_name}.py")
+
+            elif save_format == "bash":
+                # Extract bash code blocks
+                code_blocks = re.findall(r'```bash(.*?)```', last_response, re.DOTALL)
+                if not code_blocks:
+                    # Try alternative code block format
+                    code_blocks = re.findall(r'```sh(.*?)```', last_response, re.DOTALL)
+                
+                if not code_blocks:
+                    print("No bash code found in the response.")
+                    continue
+                
+                # Combine all bash code blocks
+                code = '\n\n'.join(block.strip() for block in code_blocks)
+                bash_file_name = click.prompt("Enter name for bash script (without extension)")
+                
+                with open(f"{bash_file_name}.sh", 'w') as f:
+                    f.write('#!/bin/bash\n\n' + code)
+                # Make executable
+                Path(f"{bash_file_name}.sh").chmod(0o755)
+                print(f"Bash script saved as {bash_file_name}.sh")
+
+            elif save_format == "markdown":
+                md_file_name = click.prompt("Enter name for Markdown file (without extension)")
+                with open(f"{md_file_name}.md", 'w') as md_file:
+                    md_file.write(f"# Response\n\n{last_response}")
+                print(f"Markdown saved as {md_file_name}.md")
+
+            elif save_format == "copy":
+                file_name = click.prompt("Enter name for text file (without extension)")
+                with open(f"{file_name}.txt", 'w') as f:
+                    f.write(last_response)
+                print(f"Response saved as {file_name}.txt")
+
         else:
             message_log.append({"role": "user", "content": user_input})
-            print("Querying the aether...")
+            print("\nConsulting the aether...")
             response = send_message(message_log)
             message_log.append({"role": "assistant", "content": response})
-            print(f"mAGI: {response}")
+            print(f"\nmAGI: {response}")
             last_response = response
 
 alias = "ai"

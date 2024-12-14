@@ -1,9 +1,10 @@
 import click
 import os
+import pyperclip
 from datetime import datetime
 from magi_cli.spells import SANCTUM_PATH
 
-__requires__ = ['click']
+__requires__ = ['click', 'pyperclip']
 
 def is_readable(file_path):
     """Check if a file is readable as text."""
@@ -62,25 +63,35 @@ def scribe(args, include_git):
         click.echo("The chosen path is neither a file nor a directory. The spell fizzles...")
         return
 
-    # Ask if the user wants to send the transcription to the aether
-    send_to_aether = click.confirm("Do you wish to send this transcription to the aether?", default=False)
-
-    if send_to_aether:
-        output_dir = os.path.join(SANCTUM_PATH, '.aether')
+    # Handle saving options
+    save_to_aether = click.confirm("Do you wish to send this transcription to the aether?", default=False)
+    save_to_local = False
+    
+    if not save_to_aether:
+        save_to_local = click.confirm("Would you like to save it to your local directory?", default=False)
+    
+    # Save file if requested
+    if save_to_aether or save_to_local:
+        output_dir = os.path.join(SANCTUM_PATH, '.aether') if save_to_aether else os.getcwd()
         os.makedirs(output_dir, exist_ok=True)
-        click.echo("The transcription shall be etched into the fabric of the aether...")
-    else:
-        output_dir = os.getcwd()
-        click.echo("The transcription shall remain in this mortal realm...")
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"{os.path.basename(path)}_transcription_{timestamp}.md"
+        output_path = os.path.join(output_dir, output_filename)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_filename = f"{os.path.basename(path)}_transcription_{timestamp}.md"
-    output_path = os.path.join(output_dir, output_filename)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(content)
 
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(content)
+        location = "the aether" if save_to_aether else "your local directory"
+        click.echo(f"The transcription has been etched into {output_path} in {location}.")
 
-    click.echo(f"The transcription has been etched into {output_path}. The arcane knowledge is now at your fingertips!")
+    # Ask about clipboard regardless of save choice
+    if click.confirm("Would you like to copy the transcription to your clipboard?", default=False):
+        pyperclip.copy(content)
+        click.echo("The transcription has been copied to your clipboard!")
+
+    if not (save_to_aether or save_to_local):
+        click.echo("No transcription was saved to file.")
 
 alias = "scb"
 
