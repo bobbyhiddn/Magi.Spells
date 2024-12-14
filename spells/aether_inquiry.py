@@ -142,7 +142,7 @@ def send_message(message_log):
     try:
         client = OpenAI(api_key=api_key)
         response = client.chat.completions.create(
-            model="gpt-4-0125-preview",  # Most recent model
+            model="gpt-4o",
             messages=message_log,
             max_tokens=4096,
             temperature=0.7,
