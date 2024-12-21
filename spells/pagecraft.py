@@ -30,7 +30,7 @@ else:
 def send_message(message_log):
     if client:
         response = client.chat.completions.create(
-            model="chatgpt-4o-latest",
+            model="gpt-4o",
             messages=message_log,
             max_tokens=12000,
             temperature=0.7,
