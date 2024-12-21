@@ -6,14 +6,22 @@ from bs4 import BeautifulSoup
 import click
 from openai import OpenAI
 from magi_cli.spells import SANCTUM_PATH
+from colorama import init, Fore, Style
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
-__requires__ = ['click', 'beautifulsoup4', 'openai', 'requests']
+init()  # Initialize colorama
+console = Console()  # Initialize rich console
+
+__requires__ = ['click', 'beautifulsoup4', 'openai', 'requests', 'colorama', 'rich']
 
 # Load the OpenAI API key
 api_key = os.getenv("OPENAI_API_KEY")
 
 if not api_key:
-    print("Please set the OPENAI_API_KEY environment variable.")
+    print(f"{Fore.RED}Please set the OPENAI_API_KEY environment variable.{Style.RESET_ALL}")
     sys.exit(1)
 else:
     client = OpenAI(api_key=api_key)
@@ -38,7 +46,7 @@ def fetch_content(url):
         response.raise_for_status()
         return response.text
     except requests.RequestException as e:
-        print(f"An error occurred: {e}")
+        print(f"{Fore.RED}An error occurred: {e}{Style.RESET_ALL}")
         sys.exit(1)
 
 # Parse the fetched HTML content
@@ -52,7 +60,7 @@ def parse_content(html):
 # Clean the content
 def clean_content(content):
     # Preserve the content as much as possible
-    content = content.replace('â', "'").replace('ð', '🎉')
+    content = content.replace('â', "'").replace('ðŽ‰', '🎉')
     # Retain multiple newlines to preserve formatting
     content = re.sub(r'\r\n|\r', '\n', content).strip()
     return content
@@ -106,7 +114,7 @@ def review_content(original_content, markdown_content):
     review_feedback = send_message(review_message_log)
     return review_feedback
 
-# Perform a final review and display it to the CLI
+# Perform a final review and return it
 def final_review(original_content, improved_content):
     final_review_message_log = [
         {"role": "system", "content": (
@@ -120,80 +128,98 @@ def final_review(original_content, improved_content):
             f"Improved Markdown Content:\n{improved_content}"
         )}
     ]
-    final_review = send_message(final_review_message_log)
-    print(f"Final AI Review:\n{final_review}")
+    return send_message(final_review_message_log)
 
-# Update the main function to include the new stages
 @click.command()
 @click.argument('args', nargs=-1)  # Accept multiple arguments like other spells
 def pagecraft(args):
     """ 'pgc' - Craft a Markdown page from a URL through the use of aether inquiry(AI). """
 
     if not args:
-        print("Please provide a URL to craft a page from.")
+        print(f"{Fore.RED}Please provide a URL to craft a page from.{Style.RESET_ALL}")
         sys.exit(1)
     
     url = args[0]  # Take the first argument as the URL
-    print("Fetching content.")
-    html = fetch_content(url)
-    title, body = parse_content(html)
-    print(f"Title: {title}")
-    body = clean_content(body)
     
-    # Stage 1: Generate the first draft
-    print("Generating the first draft.")
-    first_draft = to_markdown(title, body)
-    
-    # Stage 2: Review the first draft
-    print("Reviewing the first draft.")
-    review_feedback = review_content(body, first_draft)
-    
-    # Stage 3: Improve the Markdown content based on the review
-    print("Improving the Markdown content.")
-    improved_content = improve_markdown(first_draft, review_feedback, title, body)
-    
-    # Generate a filename using the AI
-    print("Generating a suitable filename.")
-    filename_message_log = [
-        {"role": "system", "content": "You are an AI trained to generate a suitable filename. Please generate a filename based on the following content."},
-        {"role": "user", "content": improved_content}
-    ]
-    filename = send_message(filename_message_log)
-    
-    # Replace any characters that are not suitable for filenames
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        # Stage 1: Fetch and parse content
+        task = progress.add_task(f"{Fore.CYAN}Fetching content...{Style.RESET_ALL}", total=None)
+        html = fetch_content(url)
+        title, body = parse_content(html)
+        body = clean_content(body)
+        progress.update(task, completed=True)
+        console.print(f"\n[cyan]Title:[/cyan] [green]{title}[/green]")
+        
+        # Stage 2: Generate the first draft
+        task = progress.add_task(f"{Fore.CYAN}Generating the first draft...{Style.RESET_ALL}", total=None)
+        first_draft = to_markdown(title, body)
+        progress.update(task, completed=True)
+        
+        # Stage 3: Review the first draft
+        task = progress.add_task(f"{Fore.CYAN}Reviewing the first draft...{Style.RESET_ALL}", total=None)
+        review_feedback = review_content(body, first_draft)
+        progress.update(task, completed=True)
+        
+        # Display review feedback
+        console.print("\n[yellow]Review Feedback:[/yellow]")
+        console.print(Panel(review_feedback, title="AI Review", border_style="yellow"))
+        
+        # Stage 4: Improve the Markdown content
+        task = progress.add_task(f"{Fore.CYAN}Improving the Markdown content...{Style.RESET_ALL}", total=None)
+        improved_content = improve_markdown(first_draft, review_feedback, title, body)
+        progress.update(task, completed=True)
+        
+        # Stage 5: Generate filename
+        task = progress.add_task(f"{Fore.CYAN}Generating a suitable filename...{Style.RESET_ALL}", total=None)
+        filename_message_log = [
+            {"role": "system", "content": "You are an AI trained to generate a suitable filename. Please generate a filename based on the following content."},
+            {"role": "user", "content": improved_content}
+        ]
+        filename = send_message(filename_message_log)
+        progress.update(task, completed=True)
+
+    # Clean up filename
     filename = filename.replace(' ', '_').replace('/', '_').replace(':', '_').replace('"', '').replace('.txt', '').replace('`', '')
-    
-    # Ensure the filename does not have duplicate extensions
     if not filename.endswith(".md"):
         filename += ".md"
     
-    # Check for SCRAPE_ARCHIVE_PATH environment variable
+    # Handle archive path
     archive_path = os.getenv('SCRAPE_ARCHIVE_PATH')
-
     if archive_path:
-        print(f"The environment variable SCRAPE_ARCHIVE_PATH is set to: {archive_path}")
-        save_in_archive = click.prompt("Do you want to save the file in the scrape archive path? (Y/n)", default='Y')
+        console.print(f"\n[cyan]The environment variable SCRAPE_ARCHIVE_PATH is set to:[/cyan] [green]{archive_path}[/green]")
+        save_in_archive = click.prompt(f"{Fore.CYAN}Do you want to save the file in the scrape archive path? (Y/n){Style.RESET_ALL}", default='Y')
         if save_in_archive.lower() in ['y', 'yes', '']:
             save_dir = archive_path
         else:
             save_dir = os.getcwd()
     else:
-        print("You can set the SCRAPE_ARCHIVE_PATH environment variable if you want the document to be generated in a specific location.")
+        console.print("\n[yellow]You can set the SCRAPE_ARCHIVE_PATH environment variable if you want the document to be generated in a specific location.[/yellow]")
         save_dir = os.getcwd()
 
     # Ensure the directory exists
     if not os.path.exists(save_dir):
         os.makedirs(save_dir, exist_ok=True)
 
-    # Save the improved content to a file in the chosen directory
+    # Save the improved content
     full_path = os.path.join(save_dir, filename)
     with open(full_path, "w", encoding='utf-8') as f:
         f.write(improved_content)
 
-    # Stage 4: Perform a final review and display it to the CLI
-    final_review(body, improved_content)
+    # Display final review
+    console.print("\n[cyan]Final Review:[/cyan]")
+    final_review_result = final_review(body, improved_content)
+    console.print(Panel(final_review_result, title="Final AI Review", border_style="blue"))
 
-    print(f"Content saved to {full_path}")
+    # Preview the markdown
+    console.print("\n[cyan]Preview of the generated markdown:[/cyan]")
+    md = Markdown(improved_content)
+    console.print(Panel(md, title=filename, border_style="green"))
+
+    console.print(f"\n[green]Content saved to:[/green] [blue]{full_path}[/blue]")
 
 alias = "pgc"
 

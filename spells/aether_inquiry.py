@@ -6,8 +6,14 @@ from datetime import datetime
 from pathlib import Path
 from magi_cli.spells import SANCTUM_PATH
 from openai import OpenAI
+from colorama import init, Fore, Style
+from rich.console import Console
+from rich.markdown import Markdown
 
-__requires__ = ['click', 'openai']
+init()  # Initialize colorama
+console = Console()  # Initialize rich console
+
+__requires__ = ['click', 'openai', 'colorama', 'rich']
 
 def is_readable(file_path):
     """Check if a file is readable as text."""
@@ -34,18 +40,18 @@ def read_directory(path, prefix="", md_file_name="directory_contents"):
         for item in os.listdir(path):
             full_path = os.path.join(path, item)
             if os.path.isdir(full_path):
-                dir_line = f"{prefix}/{item}/\n"
+                dir_line = f"{prefix}/{Fore.BLUE}{item}/{Style.RESET_ALL}\n"
                 contents += dir_line
                 md_file.write(f"## {dir_line}\n")
                 contents += read_directory(full_path, prefix=prefix + "/" + item, md_file_name=md_file_name)
             else:
-                file_line = f"{prefix}/{item}: "
+                file_line = f"{prefix}/{Fore.GREEN}{item}{Style.RESET_ALL}: "
                 if is_readable(full_path):
                     with open(full_path, 'r', encoding='utf-8', errors='replace') as file:
                         file_content = file.read()
                     file_line += f"\n```\n{file_content}\n```\n"
                 else:
-                    file_line += "[non-readable or binary content]\n"
+                    file_line += f"{Fore.YELLOW}[non-readable or binary content]{Style.RESET_ALL}\n"
                 contents += file_line
                 md_file.write(file_line)
     return contents
@@ -169,24 +175,24 @@ def aether_inquiry(args):
                          if f.startswith('Inquiry-') and f.endswith('.md')]
 
     if previous_inquiries:
-        if click.confirm("Would you like to continue a previous conversation?"):
-            print("\nSelect a previous conversation:")
+        if click.confirm(f"{Fore.CYAN}Would you like to continue a previous conversation?{Style.RESET_ALL}"):
+            print(f"\n{Fore.CYAN}Select a previous conversation:{Style.RESET_ALL}")
             for idx, filename in enumerate(previous_inquiries, 1):
-                print(f"{idx}. {filename}")
+                print(f"{Fore.GREEN}{idx}. {filename}{Style.RESET_ALL}")
             
-            selected = click.prompt("Enter conversation number (or press Enter to skip)", 
+            selected = click.prompt(f"{Fore.CYAN}Enter conversation number (or press Enter to skip){Style.RESET_ALL}", 
                                   type=click.INT, default=0, show_default=False)
             
             if 1 <= selected <= len(previous_inquiries):
                 with open(os.path.join(aether_dir, previous_inquiries[selected-1]), 'r') as f:
                     message_log.append({"role": "user", "content": f.read()})
-                print("\nPrevious conversation loaded. You may continue your inquiry.")
+                print(f"\n{Fore.GREEN}Previous conversation loaded. You may continue your inquiry.{Style.RESET_ALL}")
 
     # Handle file and directory inputs
     if args:
         for file_path in args:
             if os.path.isdir(file_path):
-                if click.confirm(f"Transcribe contents of '{file_path}' directory?"):
+                if click.confirm(f"{Fore.CYAN}Transcribe contents of '{file_path}' directory?{Style.RESET_ALL}"):
                     directory_contents = read_directory(file_path)
                     message_log.append({"role": "user", "content": directory_contents})
             else:
@@ -194,17 +200,17 @@ def aether_inquiry(args):
                     with open(file_path, 'r', encoding='utf-8') as file:
                         message_log.append({"role": "user", "content": file.read()})
                 except UnicodeDecodeError:
-                    print(f"Unable to read '{file_path}' - file appears to be binary.")
-        print("\nProvided files/folders have been analyzed. You may now inquire about them.")
+                    print(f"{Fore.RED}Unable to read '{file_path}' - file appears to be binary.{Style.RESET_ALL}")
+        print(f"\n{Fore.GREEN}Provided files/folders have been analyzed. You may now inquire about them.{Style.RESET_ALL}")
     else:
-        print("\nYou may begin your inquiry with the aether.")
+        print(f"\n{Fore.CYAN}You may begin your inquiry with the aether.{Style.RESET_ALL}")
 
     last_response = ""
     while True:
-        user_input = click.prompt("You", type=str)
+        user_input = click.prompt(f"{Fore.CYAN}You{Style.RESET_ALL}", type=str)
 
         if user_input.lower() == "quit":
-            if click.confirm("Save this conversation?"):
+            if click.confirm(f"{Fore.CYAN}Save this conversation?{Style.RESET_ALL}"):
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 inquiry_filename = f"Inquiry-{timestamp}.md"
                 
@@ -213,13 +219,13 @@ def aether_inquiry(args):
                     for message in message_log:
                         sender = 'User' if message['role'] == 'user' else 'mAGI'
                         f.write(f"{sender}: {message['content']}\n\n")
-                print(f"Conversation saved as {inquiry_filename}")
-            print("May your future inquiries be fruitful. Farewell.")
+                print(f"{Fore.GREEN}Conversation saved as {inquiry_filename}{Style.RESET_ALL}")
+            print(f"{Fore.GREEN}May your future inquiries be fruitful. Farewell.{Style.RESET_ALL}")
             break
 
         elif user_input.lower() == "scribe":
             save_format = click.prompt(
-                "Save as",
+                f"{Fore.CYAN}Save as{Style.RESET_ALL}",
                 type=click.Choice(['yaml', 'python', 'bash', 'markdown', 'copy'], case_sensitive=False)
             )
 
@@ -227,17 +233,17 @@ def aether_inquiry(args):
                 # Extract YAML content from code blocks
                 yaml_blocks = re.findall(r'```yaml(.*?)```', last_response, re.DOTALL)
                 if not yaml_blocks:
-                    print("No YAML configuration found in the response.")
+                    print(f"{Fore.YELLOW}No YAML configuration found in the response.{Style.RESET_ALL}")
                     continue
                     
                 yaml_content = yaml_blocks[0].strip()
-                yaml_file_name = click.prompt("Enter name for YAML file (without extension)")
+                yaml_file_name = click.prompt(f"{Fore.CYAN}Enter name for YAML file (without extension){Style.RESET_ALL}")
                 
                 with open(f"{yaml_file_name}.yaml", 'w') as f:
                     f.write(yaml_content)
-                print(f"\nYAML configuration saved as {yaml_file_name}.yaml")
-                print(f"\nTo create the spell, run:")
-                print(f"cast sc {yaml_file_name}.yaml")
+                print(f"{Fore.GREEN}YAML configuration saved as {yaml_file_name}.yaml{Style.RESET_ALL}")
+                print(f"\n{Fore.GREEN}To create the spell, run:{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}cast sc {yaml_file_name}.yaml{Style.RESET_ALL}")
 
             elif save_format == "python":
                 # Extract Python code blocks
@@ -247,18 +253,18 @@ def aether_inquiry(args):
                     code_blocks = re.findall(r'```py(.*?)```', last_response, re.DOTALL)
                 
                 if not code_blocks:
-                    print("No Python code found in the response.")
+                    print(f"{Fore.YELLOW}No Python code found in the response.{Style.RESET_ALL}")
                     continue
                 
                 # Combine all Python code blocks
                 code = '\n\n'.join(block.strip() for block in code_blocks)
-                python_file_name = click.prompt("Enter name for Python script (without extension)")
+                python_file_name = click.prompt(f"{Fore.CYAN}Enter name for Python script (without extension){Style.RESET_ALL}")
                 
                 with open(f"{python_file_name}.py", 'w') as f:
                     f.write(code)
                 # Make executable
                 Path(f"{python_file_name}.py").chmod(0o755)
-                print(f"Python script saved as {python_file_name}.py")
+                print(f"{Fore.GREEN}Python script saved as {python_file_name}.py{Style.RESET_ALL}")
 
             elif save_format == "bash":
                 # Extract bash code blocks
@@ -268,37 +274,47 @@ def aether_inquiry(args):
                     code_blocks = re.findall(r'```sh(.*?)```', last_response, re.DOTALL)
                 
                 if not code_blocks:
-                    print("No bash code found in the response.")
+                    print(f"{Fore.YELLOW}No bash code found in the response.{Style.RESET_ALL}")
                     continue
                 
                 # Combine all bash code blocks
                 code = '\n\n'.join(block.strip() for block in code_blocks)
-                bash_file_name = click.prompt("Enter name for bash script (without extension)")
+                bash_file_name = click.prompt(f"{Fore.CYAN}Enter name for bash script (without extension){Style.RESET_ALL}")
                 
                 with open(f"{bash_file_name}.sh", 'w') as f:
                     f.write('#!/bin/bash\n\n' + code)
                 # Make executable
                 Path(f"{bash_file_name}.sh").chmod(0o755)
-                print(f"Bash script saved as {bash_file_name}.sh")
+                print(f"{Fore.GREEN}Bash script saved as {bash_file_name}.sh{Style.RESET_ALL}")
 
             elif save_format == "markdown":
-                md_file_name = click.prompt("Enter name for Markdown file (without extension)")
+                md_file_name = click.prompt(f"{Fore.CYAN}Enter name for Markdown file (without extension){Style.RESET_ALL}")
                 with open(f"{md_file_name}.md", 'w') as md_file:
-                    md_file.write(f"# Response\n\n{last_response}")
-                print(f"Markdown saved as {md_file_name}.md")
+                    # Add some styling hints for the markdown
+                    styled_response = f"# {md_file_name.title()}\n\n{last_response}"
+                    md_file.write(styled_response)
+                print(f"{Fore.GREEN}Markdown saved as {md_file_name}.md{Style.RESET_ALL}")
+                
+                # Preview the markdown
+                print(f"\n{Fore.CYAN}Preview of the markdown:{Style.RESET_ALL}")
+                md = Markdown(styled_response)
+                console.print(md)
 
             elif save_format == "copy":
-                file_name = click.prompt("Enter name for text file (without extension)")
+                file_name = click.prompt(f"{Fore.CYAN}Enter name for text file (without extension){Style.RESET_ALL}")
                 with open(f"{file_name}.txt", 'w') as f:
                     f.write(last_response)
-                print(f"Response saved as {file_name}.txt")
+                print(f"{Fore.GREEN}Response saved as {file_name}.txt{Style.RESET_ALL}")
 
         else:
             message_log.append({"role": "user", "content": user_input})
-            print("\nConsulting the aether...")
+            print(f"\n{Fore.CYAN}Consulting the aether...{Style.RESET_ALL}")
             response = send_message(message_log)
             message_log.append({"role": "assistant", "content": response})
-            print(f"\nmAGI: {response}")
+            print(f"\n{Fore.MAGENTA}mAGI:{Style.RESET_ALL}")
+            # Render the response as rich markdown
+            md = Markdown(response)
+            console.print(md)
             last_response = response
 
 alias = "ai"
