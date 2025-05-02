@@ -16,19 +16,25 @@ def is_readable(file_path):
     except (UnicodeDecodeError, IOError):
         return False
 
-def read_directory(path, prefix="", ignore_git=True):
+def read_directory(path, prefix="", ignore_git=True, _gitignore_specs=None):
     """Recursively read the contents of a directory."""
     contents = ""
     
+    # Initialize or update gitignore specs
+    if _gitignore_specs is None:
+        _gitignore_specs = []
+    
     # Load gitignore patterns if needed
-    gitignore_patterns = None
     if ignore_git:
         gitignore_path = os.path.join(path, '.gitignore')
         if os.path.exists(gitignore_path):
             with open(gitignore_path, 'r', encoding='utf-8') as f:
-                patterns = [p.strip() for p in f.readlines() if p.strip()]
-                gitignore_patterns = pathspec.PathSpec.from_lines('gitwildmatch', patterns)
-                click.secho("Using .gitignore patterns", fg='blue', dim=True)
+                patterns = [p.strip() for p in f.readlines() if p.strip() and not p.startswith('#')]
+                # Create a new spec for this directory level
+                current_spec = pathspec.PathSpec.from_lines('gitwildmatch', patterns)
+                _gitignore_specs.append((path, current_spec))
+                if patterns:  # Only show message if there are actual patterns
+                    click.secho(f"Using .gitignore patterns from {gitignore_path}", fg='blue', dim=True)
     
     for item in os.listdir(path):
         # Skip .git directory if ignore_git is True
@@ -36,22 +42,32 @@ def read_directory(path, prefix="", ignore_git=True):
             continue
             
         full_path = os.path.join(path, item)
-        rel_path = os.path.relpath(full_path, path)
         
-        # For directories, ensure path ends with / for proper matching
-        if os.path.isdir(full_path):
-            rel_path_for_match = rel_path + "/"
-        else:
-            rel_path_for_match = rel_path
-            
-        # Skip if path matches gitignore patterns
-        if gitignore_patterns and gitignore_patterns.match_file(rel_path_for_match):
+        # Check against all gitignore specs, from most specific to most general
+        should_ignore = False
+        if ignore_git and _gitignore_specs:
+            for spec_path, spec in reversed(_gitignore_specs):
+                # Get the relative path from the gitignore file's location
+                rel_to_spec = os.path.relpath(full_path, spec_path)
+                # Normalize path separators for consistent matching
+                rel_to_spec = rel_to_spec.replace(os.sep, '/')
+                # For directories, ensure path ends with / for proper matching
+                if os.path.isdir(full_path):
+                    rel_to_spec += "/"
+                if spec.match_file(rel_to_spec):
+                    should_ignore = True
+                    break
+        
+        if should_ignore:
             continue
         
         if os.path.isdir(full_path):
             dir_line = f"{prefix}/{item}/\n"
             contents += f"## {dir_line}\n"
-            contents += read_directory(full_path, prefix=f"{prefix}/{item}", ignore_git=ignore_git)
+            # Pass down the accumulated gitignore specs to subdirectories
+            contents += read_directory(full_path, prefix=f"{prefix}/{item}", 
+                                    ignore_git=ignore_git, 
+                                    _gitignore_specs=_gitignore_specs[:])
         else:
             file_line = f"{prefix}/{item}: "
             if is_readable(full_path):
